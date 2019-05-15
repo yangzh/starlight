@@ -72,6 +72,10 @@ func toValue(val reflect.Value) (starlark.Value, error) {
 	case reflect.Struct:
 		return &GoStruct{v: val}, nil
 	case reflect.Interface:
+		// Special case: leave starlark.Value alone, without wrapping it with *GoInterface.
+		if sv, ok := val.Interface().(starlark.Value); ok {
+			return sv, nil
+		}
 		return &GoInterface{v: val}, nil
 	}
 
@@ -291,6 +295,9 @@ func makeStarFn(name string, gofn reflect.Value) *starlark.Builtin {
 			val := reflect.ValueOf(v)
 			argT := gofn.Type().In(i)
 			if !val.Type().AssignableTo(argT) {
+				if !val.Type().ConvertibleTo(argT) {
+					return starlark.None, fmt.Errorf("arg %d got %s, expected type %s", i, val.Type(), argT)
+				}
 				val = val.Convert(argT)
 			}
 			rvs = append(rvs, val)
@@ -345,6 +352,9 @@ func makeVariadicStarFn(name string, gofn reflect.Value) *starlark.Builtin {
 			val := reflect.ValueOf(vals[i])
 			argT := gofn.Type().In(i)
 			if !val.Type().AssignableTo(argT) {
+				if !val.Type().ConvertibleTo(argT) {
+					return starlark.None, fmt.Errorf("arg %d got %s, expected %s", i, val.Type(), argT)
+				}
 				val = val.Convert(argT)
 			}
 			rvs = append(rvs, val)
